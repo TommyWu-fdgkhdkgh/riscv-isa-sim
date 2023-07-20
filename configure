@@ -6330,10 +6330,24 @@ $as_echo "$as_me: configuring default subproject : spike_dasm" >&6;}
 
 $as_echo "#define SPIKE_DASM_ENABLED /**/" >>confdefs.h
 
+    # Add subproject to our running list
+
+    subprojects="$subprojects riscv_sysc"
+
+    # Process the subproject appropriately. If enabled add it to the
+    # $enabled_subprojects running shell variable, set a
+    # SUBPROJECT_ENABLED C define, and include the appropriate
+    # 'subproject.ac'.
 
 
+      { $as_echo "$as_me:${as_lineno-$LINENO}: configuring default subproject : riscv_sysc" >&5
+$as_echo "$as_me: configuring default subproject : riscv_sysc" >&6;}
+      ac_config_files="$ac_config_files riscv_sysc.mk:riscv_sysc/riscv_sysc.mk.in"
 
+      enable_spike_dasm_sproj="yes"
+      subprojects_enabled="$subprojects_enabled riscv_sysc"
 
+$as_echo "#define RISCV_SYSC_ENABLED /**/" >>confdefs.h
 
   # Output make variables
 

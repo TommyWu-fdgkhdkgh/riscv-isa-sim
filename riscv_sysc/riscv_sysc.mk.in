@@ -1,0 +1,29 @@
+riscv_sysc_subproject_deps = \
+	fdt \
+	fesvr \
+	softfloat \
+	disasm \
+	riscv \
+
+riscv_sysc_srcs = \
+    test.cc \
+    test2.cc
+
+# archive
+riscv_sysc_install_lib = yes
+
+# *.so
+riscv_sysc_install_shared_lib = yes
+
+# ???
+#riscv_sysc_install_pcs = yes
+
+riscv_sysc_install_config_hdr = yes
+
+riscv_sysc_test_srcs = \
+
+# executable file
+riscv_sysc_install_prog_srcs = \
+
+riscv_sysc_install_hdrs = \
+	test.h \

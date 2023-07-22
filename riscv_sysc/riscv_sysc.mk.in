@@ -6,13 +6,12 @@ riscv_sysc_subproject_deps = \
 	riscv \
 
 riscv_sysc_srcs = \
-    test.cc \
-    test2.cc
+    iss_sysc.cc \
 
-# archive
+# *.a ( archive )
 riscv_sysc_install_lib = yes
 
-# *.so
+# *.so ( shared library )
 riscv_sysc_install_shared_lib = yes
 
 # ???
@@ -26,4 +25,4 @@ riscv_sysc_test_srcs = \
 riscv_sysc_install_prog_srcs = \
 
 riscv_sysc_install_hdrs = \
-	test.h \
+	iss_sysc.h \

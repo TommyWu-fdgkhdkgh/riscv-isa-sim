@@ -299,11 +299,13 @@ public:
   void set_pmp_num(reg_t pmp_num);
   void set_pmp_granularity(reg_t pmp_granularity);
   void set_mmu_capability(int cap);
+  void set_state_pc(reg_t pc) { state.pc = pc; }
 
   const char* get_symbol(uint64_t addr);
 
   void clear_waiting_for_interrupt() { in_wfi = false; };
   bool is_waiting_for_interrupt() { return in_wfi; };
+  uint64_t get_num_cycles() { return total_num_cycles; }
 
 private:
   const isa_parser_t * const isa;
@@ -324,6 +326,7 @@ private:
   bool in_wfi;
   bool check_triggers_icount;
   std::vector<bool> impl_table;
+  uint64_t total_num_cycles;
 
   // Note: does not include single-letter extensions in misa
   std::bitset<NUM_ISA_EXTENSIONS> extension_enable_table;

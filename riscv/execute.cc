@@ -160,6 +160,15 @@ inline void processor_t::update_histogram(reg_t pc)
 // These two functions are expected to be inlined by the compiler separately in
 // the processor_t::step() loop. The logged variant is used in the slow path
 static inline reg_t execute_insn_fast(processor_t* p, reg_t pc, insn_fetch_t fetch) {
+  static uint64_t pc_counter = 0;
+  static bool pc_trace = false;
+  pc_counter++;
+  if ((pc_counter % 10000000) == 0) {
+    printf("counter : %lu, pc : 0x%lx\n", pc_counter, pc);
+  }
+  if (pc_trace) {
+    printf("pc_trace : pc 0x%lx\n", pc);
+  }
   return fetch.func(p, fetch.insn, pc);
 }
 static inline reg_t execute_insn_logged(processor_t* p, reg_t pc, insn_fetch_t fetch)
@@ -281,6 +290,7 @@ void processor_t::step(size_t n)
           if (debug && !state.serialized)
             disasm(fetch.insn);
           pc = execute_insn_logged(this, pc, fetch);
+          total_num_cycles++;
           advance_pc();
         }
       }
@@ -290,6 +300,7 @@ void processor_t::step(size_t n)
         for (auto ic_entry = _mmu->access_icache(pc); ; ) {
           auto fetch = ic_entry->data;
           pc = execute_insn_fast(this, pc, fetch);
+          total_num_cycles++;
           ic_entry = ic_entry->next;
           if (unlikely(ic_entry->tag != pc))
             break;

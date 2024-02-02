@@ -17,6 +17,7 @@
 #include "triggers.h"
 #include "../fesvr/memif.h"
 #include "vector_unit.h"
+#include "cachesim.h"
 
 #define N_HPMCOUNTERS 29
 
@@ -307,6 +308,14 @@ public:
   bool is_waiting_for_interrupt() { return in_wfi; };
   uint64_t get_num_cycles() { return total_num_cycles; }
 
+  // workaround by fdgk
+  void register_memtracer(memtracer_t*);
+  void set_cache_blocksz(reg_t size);
+  void set_max_cycles(uint64_t cycles);
+  void set_enable_simple_pc_trace(bool enable);
+  void set_simple_pc_mod(uint64_t pc_mod);
+  void force_finish_sim();
+
 private:
   const isa_parser_t * const isa;
   const cfg_t * const cfg;
@@ -327,6 +336,10 @@ private:
   bool check_triggers_icount;
   std::vector<bool> impl_table;
   uint64_t total_num_cycles;
+  uint64_t max_cycles;
+  bool enable_simple_pc_trace;
+  uint64_t simple_pc_mod;
+  std::vector<cache_memtracer_t *> cache_tracers;
 
   // Note: does not include single-letter extensions in misa
   std::bitset<NUM_ISA_EXTENSIONS> extension_enable_table;

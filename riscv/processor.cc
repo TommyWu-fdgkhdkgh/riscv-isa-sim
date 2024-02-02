@@ -37,7 +37,8 @@ processor_t::processor_t(const isa_parser_t *isa, const cfg_t *cfg,
   log_file(log_file), sout_(sout_.rdbuf()), halt_on_reset(halt_on_reset),
   in_wfi(false), check_triggers_icount(false),
   impl_table(256, false), extension_enable_table(isa->get_extension_table()),
-  last_pc(1), executions(1), TM(cfg->trigger_count), total_num_cycles(0)
+  last_pc(1), executions(1), TM(cfg->trigger_count), total_num_cycles(0), max_cycles(0),
+  enable_simple_pc_trace(false), simple_pc_mod(1)
 {
   VU.p = this;
   TM.proc = this;
@@ -897,6 +898,34 @@ void processor_t::take_trigger_action(triggers::action_t action, reg_t breakpoin
 const char* processor_t::get_symbol(uint64_t addr)
 {
   return sim->get_symbol(addr);
+}
+
+void processor_t::register_memtracer(memtracer_t* t) {
+  cache_tracers.push_back(dynamic_cast<cache_memtracer_t *>(t));  
+  mmu->register_memtracer(t);
+}
+
+void processor_t::set_cache_blocksz(reg_t size) {
+  mmu->set_cache_blocksz(size);
+}
+
+void processor_t::set_max_cycles(uint64_t cycles) {
+  max_cycles = cycles;
+}
+
+void processor_t::set_enable_simple_pc_trace(bool enable) {
+  enable_simple_pc_trace = enable;
+}
+
+void processor_t::set_simple_pc_mod(uint64_t pc_mod) {
+  simple_pc_mod = pc_mod;
+}
+
+void processor_t::force_finish_sim() {
+  for (auto it : cache_tracers) {
+    it->print_stats();
+  }
+  exit(0);
 }
 
 void processor_t::disasm(insn_t insn)

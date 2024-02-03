@@ -75,6 +75,8 @@ processor_t::processor_t(const isa_parser_t *isa, const cfg_t *cfg,
   set_impl(IMPL_MMU_ASID, true);
   set_impl(IMPL_MMU_VMID, true);
 
+  pipeline_queue = std::vector<insn_fetch_t>(5);
+
   reset();
 }
 

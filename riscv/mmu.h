@@ -21,11 +21,13 @@ const reg_t PGSIZE = 1 << PGSHIFT;
 const reg_t PGMASK = ~(PGSIZE-1);
 #define MAX_PADDR_BITS 56 // imposed by Sv39 / Sv48
 
+/*
 struct insn_fetch_t
 {
   insn_func_t func;
   insn_t insn;
 };
+*/
 
 struct icache_entry_t {
   reg_t tag;
@@ -36,6 +38,7 @@ struct icache_entry_t {
 struct tlb_entry_t {
   char* host_offset;
   reg_t target_offset;
+  bool enable_dmi;
 };
 
 struct xlate_flags_t {
@@ -95,13 +98,29 @@ public:
 
   template<typename T>
   T ALWAYS_INLINE load(reg_t addr, xlate_flags_t xlate_flags = {false, false, false}) {
+    // TODO
     target_endian<T> res;
     reg_t vpn = addr >> PGSHIFT;
     bool aligned = (addr & (sizeof(T) - 1)) == 0;
     bool tlb_hit = tlb_load_tag[vpn % TLB_ENTRIES] == vpn;
 
     if (likely(!xlate_flags.is_special_access() && aligned && tlb_hit)) {
+#if 0
       res = *(target_endian<T>*)(tlb_data[vpn % TLB_ENTRIES].host_offset + addr);
+#else
+      auto tlb_entry = tlb_data[vpn % TLB_ENTRIES];
+      if (tlb_entry.enable_dmi) {
+        res = *(target_endian<T>*)(tlb_entry.host_offset + addr);
+      } else {
+
+        // if the target doesn't support dmi
+        auto access_info = generate_access_info(addr, LOAD, xlate_flags);
+        auto paddr = tlb_entry.target_offset + addr;
+        if (!mmio_load(paddr, sizeof(T), (uint8_t*)&res)) {
+          throw trap_load_access_fault(access_info.effective_virt, addr, 0, 0);
+        }
+      }
+#endif
     } else {
       load_slow_path(addr, sizeof(T), (uint8_t*)&res, xlate_flags);
     }
@@ -143,7 +162,23 @@ public:
     bool tlb_hit = tlb_store_tag[vpn % TLB_ENTRIES] == vpn;
 
     if (!xlate_flags.is_special_access() && likely(aligned && tlb_hit)) {
+#if 0
       *(target_endian<T>*)(tlb_data[vpn % TLB_ENTRIES].host_offset + addr) = to_target(val);
+#else
+      auto tlb_entry = tlb_data[vpn % TLB_ENTRIES];
+      if (tlb_entry.enable_dmi) {
+        *(target_endian<T>*)(tlb_entry.host_offset + addr) = to_target(val);
+      } else {
+
+        // if the target doesn't support dmi
+        auto access_info = generate_access_info(addr, STORE, xlate_flags);
+        auto paddr = tlb_entry.target_offset + addr;
+        target_endian<T> target_val = to_target(val);
+        if (!mmio_store(paddr, sizeof(T), (const uint8_t*)&target_val)) {
+          throw trap_store_access_fault(access_info.effective_virt, addr, 0, 0);
+        }  
+      }
+#endif
     } else {
       target_endian<T> target_val = to_target(val);
       store_slow_path(addr, sizeof(T), (const uint8_t*)&target_val, xlate_flags, true, false);
@@ -463,8 +498,24 @@ private:
   // ITLB lookup
   inline tlb_entry_t translate_insn_addr(reg_t addr) {
     reg_t vpn = addr >> PGSHIFT;
+#if 0
     if (likely(tlb_insn_tag[vpn % TLB_ENTRIES] == vpn))
       return tlb_data[vpn % TLB_ENTRIES];
+#else
+    if (likely(tlb_insn_tag[vpn % TLB_ENTRIES] == vpn)) {
+      auto result = tlb_data[vpn % TLB_ENTRIES];
+
+      if (result.enable_dmi == false) {
+        auto paddr = result.target_offset + addr;
+        if (!mmio_fetch(paddr, sizeof fetch_temp, (uint8_t*)&fetch_temp)) {
+          throw trap_instruction_access_fault(proc->state.v, addr, 0, 0);
+        }
+        return {(char*)&fetch_temp - addr, paddr - addr};
+      } else {
+        return tlb_data[vpn % TLB_ENTRIES];
+      }
+    }
+#endif
     return fetch_slow_path(addr);
   }
 

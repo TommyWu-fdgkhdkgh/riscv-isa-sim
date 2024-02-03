@@ -29,6 +29,12 @@ class trap_t;
 class extension_t;
 class disassembler_t;
 
+struct insn_fetch_t
+{
+  insn_func_t func;
+  insn_t insn;
+};
+
 reg_t illegal_instruction(processor_t* p, insn_t insn, reg_t pc);
 
 struct insn_desc_t
@@ -340,6 +346,7 @@ private:
   bool enable_simple_pc_trace;
   uint64_t simple_pc_mod;
   std::vector<cache_memtracer_t *> cache_tracers;
+  std::vector<insn_fetch_t> pipeline_queue;
 
   // Note: does not include single-letter extensions in misa
   std::bitset<NUM_ISA_EXTENSIONS> extension_enable_table;

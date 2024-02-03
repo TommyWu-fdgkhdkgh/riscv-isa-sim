@@ -75,6 +75,7 @@ tlb_entry_t mmu_t::fetch_slow_path(reg_t vaddr)
 
   tlb_entry_t result;
   reg_t vpn = vaddr >> PGSHIFT;
+#if 0
   if (unlikely(tlb_insn_tag[vpn % TLB_ENTRIES] != (vpn | TLB_CHECK_TRIGGERS))) {
     reg_t paddr = translate(access_info, sizeof(fetch_temp));
     if (auto host_addr = sim->addr_to_mem(paddr)) {
@@ -87,6 +88,38 @@ tlb_entry_t mmu_t::fetch_slow_path(reg_t vaddr)
   } else {
     result = tlb_data[vpn % TLB_ENTRIES];
   }
+#else
+  if (unlikely(tlb_insn_tag[vpn % TLB_ENTRIES] != (vpn | TLB_CHECK_TRIGGERS))) {
+
+    // page table walk
+    // it takes a long time
+    reg_t paddr = translate(access_info, sizeof(fetch_temp));
+
+    auto host_addr = sim->addr_to_mem(paddr);
+    result = refill_tlb(vaddr, paddr, host_addr, FETCH);
+
+    // if the target doesn't suppor the dmi
+    // we should return a temporary tlb_entry_t
+    if (host_addr == 0) {
+      if (!mmio_fetch(paddr, sizeof fetch_temp, (uint8_t*)&fetch_temp)) {
+        throw trap_instruction_access_fault(proc->state.v, vaddr, 0, 0);
+      }
+      result = {(char*)&fetch_temp - vaddr, paddr - vaddr, false};
+    }
+
+  } else {
+    result = tlb_data[vpn % TLB_ENTRIES];
+
+    // if the target don't support dmi
+    if ((result.host_offset + vaddr) == 0) {
+      auto paddr = result.target_offset + vaddr;
+      if (!mmio_fetch(paddr, sizeof fetch_temp, (uint8_t*)&fetch_temp)) {
+        throw trap_instruction_access_fault(proc->state.v, vaddr, 0, 0);
+      }
+      result = {(char*)&fetch_temp - vaddr, paddr - vaddr, false};
+    }
+  }
+#endif
 
   check_triggers(triggers::OPERATION_EXECUTE, vaddr, access_info.effective_virt, from_le(*(const uint16_t*)(result.host_offset + vaddr)));
 
@@ -191,6 +224,9 @@ void mmu_t::check_triggers(triggers::operation_t operation, reg_t address, bool 
 
 void mmu_t::load_slow_path_intrapage(reg_t len, uint8_t* bytes, mem_access_info_t access_info)
 {
+  // TODO
+
+#if 0
   reg_t addr = access_info.vaddr;
   reg_t vpn = addr >> PGSHIFT;
   if (!access_info.flags.is_special_access() && vpn == (tlb_load_tag[vpn % TLB_ENTRIES] & ~TLB_CHECK_TRIGGERS)) {
@@ -219,6 +255,53 @@ void mmu_t::load_slow_path_intrapage(reg_t len, uint8_t* bytes, mem_access_info_
   if (access_info.flags.lr) {
     load_reservation_address = paddr;
   }
+#else
+  reg_t addr = access_info.vaddr;
+  reg_t vpn = addr >> PGSHIFT;
+  if (!access_info.flags.is_special_access() && vpn == (tlb_load_tag[vpn % TLB_ENTRIES] & ~TLB_CHECK_TRIGGERS)) {
+
+    auto tlb_entry = tlb_data[vpn % TLB_ENTRIES];
+
+    if (tlb_entry.enable_dmi) {
+      auto host_addr = tlb_entry.host_offset + addr;
+      memcpy(bytes, host_addr, len);
+    } else {
+
+      // if the targe doesn't support dmi
+      auto paddr = tlb_entry.target_offset + addr;
+      if (!mmio_load(paddr, len, bytes)) {
+        throw trap_load_access_fault(access_info.effective_virt, addr, 0, 0);
+      }
+    }
+    return;
+  }
+
+  reg_t paddr = translate(access_info, len);
+
+  if (access_info.flags.lr && !sim->reservable(paddr)) {
+    throw trap_load_access_fault(access_info.effective_virt, addr, 0, 0);
+  }
+
+  if (auto host_addr = sim->addr_to_mem(paddr)) {
+    memcpy(bytes, host_addr, len);
+    if (tracer.interested_in_range(paddr, paddr + PGSIZE, LOAD))
+      tracer.trace(paddr, len, LOAD);
+    else if (!access_info.flags.is_special_access())
+      refill_tlb(addr, paddr, host_addr, LOAD);
+
+  } else {
+
+    // if the targe doesn't support dmi
+    refill_tlb(addr, paddr, host_addr, LOAD);
+    if (!mmio_load(paddr, len, bytes)) {
+      throw trap_load_access_fault(access_info.effective_virt, addr, 0, 0);
+    }
+  }
+
+  if (access_info.flags.lr) {
+    load_reservation_address = paddr;
+  }
+#endif
 }
 
 void mmu_t::load_slow_path(reg_t addr, reg_t len, uint8_t* bytes, xlate_flags_t xlate_flags)
@@ -252,6 +335,9 @@ void mmu_t::load_slow_path(reg_t addr, reg_t len, uint8_t* bytes, xlate_flags_t 
 
 void mmu_t::store_slow_path_intrapage(reg_t len, const uint8_t* bytes, mem_access_info_t access_info, bool actually_store)
 {
+  // TODO
+
+#if 0
   reg_t addr = access_info.vaddr;
   reg_t vpn = addr >> PGSHIFT;
   if (!access_info.flags.is_special_access() && vpn == (tlb_store_tag[vpn % TLB_ENTRIES] & ~TLB_CHECK_TRIGGERS)) {
@@ -275,6 +361,46 @@ void mmu_t::store_slow_path_intrapage(reg_t len, const uint8_t* bytes, mem_acces
       throw trap_store_access_fault(access_info.effective_virt, addr, 0, 0);
     }
   }
+#else
+  reg_t addr = access_info.vaddr;
+  reg_t vpn = addr >> PGSHIFT;
+  if (!access_info.flags.is_special_access() && vpn == (tlb_store_tag[vpn % TLB_ENTRIES] & ~TLB_CHECK_TRIGGERS)) {
+    if (actually_store) {
+      auto tlb_entry = tlb_data[vpn % TLB_ENTRIES];
+
+      if (tlb_entry.enable_dmi) {
+        auto host_addr = tlb_entry.host_offset + addr;
+        memcpy(host_addr, bytes, len);
+      } else {
+        // if the targe doesn't support dmi
+        auto paddr = tlb_entry.target_offset + addr;
+        if (!mmio_store(paddr, len, bytes)) {
+          throw trap_store_access_fault(access_info.effective_virt, addr, 0, 0);
+        }
+      }
+    }
+    return;
+  }
+
+  reg_t paddr = translate(access_info, len);
+
+  if (actually_store) {
+    if (auto host_addr = sim->addr_to_mem(paddr)) {
+      memcpy(host_addr, bytes, len);
+      if (tracer.interested_in_range(paddr, paddr + PGSIZE, STORE))
+        tracer.trace(paddr, len, STORE);
+      else if (!access_info.flags.is_special_access())
+        refill_tlb(addr, paddr, host_addr, STORE);
+    } else {
+
+      // if the targe doesn't support dmi
+      refill_tlb(addr, paddr, host_addr, STORE);
+      if (!mmio_store(paddr, len, bytes)) {
+        throw trap_store_access_fault(access_info.effective_virt, addr, 0, 0);
+      }
+    }
+  }
+#endif
 }
 
 void mmu_t::store_slow_path(reg_t addr, reg_t len, const uint8_t* bytes, xlate_flags_t xlate_flags, bool actually_store, bool UNUSED require_alignment)
@@ -313,7 +439,11 @@ tlb_entry_t mmu_t::refill_tlb(reg_t vaddr, reg_t paddr, char* host_addr, access_
   reg_t idx = (vaddr >> PGSHIFT) % TLB_ENTRIES;
   reg_t expected_tag = vaddr >> PGSHIFT;
 
-  tlb_entry_t entry = {host_addr - vaddr, paddr - vaddr};
+  tlb_entry_t entry = {host_addr - vaddr, paddr - vaddr, true};
+
+  if (host_addr == 0) {
+    entry.enable_dmi = false;
+  }
 
   if (in_mprv())
     return entry;

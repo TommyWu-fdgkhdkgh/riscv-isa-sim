@@ -315,6 +315,29 @@ void processor_t::step(size_t n)
             break;
           instret++;
           state.pc = pc;
+
+          /*
+           * very basic pipeline model
+          auto retire = pipeline_queue.back();
+          for (int i = 1; i < pipeline_queue.size(); i++) {
+            pipeline_queue[i] = pipeline_queue[i - 1];
+          }
+          pipeline_queue[0] = fetch;
+
+          total_num_cycles++;
+          if (retire.func) {
+            pc = execute_insn_fast(this, pc, fetch);
+            ic_entry = ic_entry->next;
+            if (unlikely(ic_entry->tag != pc))
+              break;
+            if (unlikely(instret + 1 == n))
+              break;
+            instret++;
+            state.pc = pc;
+          } else {
+            printf("there is no retired insn!\n");
+          }
+          */
         }
 
         advance_pc();

@@ -111,7 +111,7 @@ tlb_entry_t mmu_t::fetch_slow_path(reg_t vaddr)
     result = tlb_data[vpn % TLB_ENTRIES];
 
     // if the target don't support dmi
-    if ((result.host_offset + vaddr) == 0) {
+    if (!result.enable_dmi) {
       auto paddr = result.target_offset + vaddr;
       if (!mmio_fetch(paddr, sizeof fetch_temp, (uint8_t*)&fetch_temp)) {
         throw trap_instruction_access_fault(proc->state.v, vaddr, 0, 0);

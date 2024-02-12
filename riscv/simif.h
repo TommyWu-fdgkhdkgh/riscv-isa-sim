@@ -34,6 +34,7 @@ public:
   unsigned nprocs() const { return get_cfg().nprocs(); }
 
   mmu_t* debug_mmu;  // debug port into main memory, for use by debug_module
+  bool tlb_optimize_for_no_dmi = true;
 };
 
 #endif
